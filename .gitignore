@@ -3,7 +3,6 @@ node_modules/
 # Large wordlist files — download separately (see README)
 server/rockyou.txt
 server/rockyou-*.txt
-server/passwords.txt
 
 # Uploaded PDFs (temp files if any land on disk)
 server/uploads/

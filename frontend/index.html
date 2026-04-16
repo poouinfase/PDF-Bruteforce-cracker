@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian Sentinel | PDF Decryption Engine</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "outline":                    "#5b74b1",
+          "secondary-dim":              "#909fb6",
+          "surface-container-low":      "#06122d",
+          "tertiary":                   "#d7e6ff",
+          "on-secondary-container":     "#b2c0d9",
+          "surface-dim":                "#060e20",
+          "inverse-surface":            "#faf8ff",
+          "on-secondary":               "#122133",
+          "outline-variant":            "#2b4680",
+          "surface-variant":            "#00225a",
+          "secondary-container":        "#2e3c50",
+          "surface":                    "#060e20",
+          "primary":                    "#4edea3",
+          "primary-fixed-dim":          "#5fedb0",
+          "surface-bright":             "#002867",
+          "on-primary-container":       "#5ae9ac",
+          "inverse-on-surface":         "#4d556b",
+          "surface-tint":               "#4edea3",
+          "on-surface-variant":         "#91aaeb",
+          "surface-container":          "#05183c",
+          "secondary":                  "#909fb6",
+          "primary-fixed":              "#6ffbbe",
+          "on-primary-fixed":           "#004930",
+          "primary-container":          "#005236",
+          "surface-container-lowest":   "#000000",
+          "error":                      "#ee7d77",
+          "on-error":                   "#490106",
+          "surface-container-high":     "#031d4b",
+          "on-surface":                 "#dee5ff",
+          "error-container":            "#7f2927",
+          "primary-dim":                "#3cd096",
+          "on-primary":                 "#004930",
+        },
+        fontFamily: {
+          "headline": ["Manrope"],
+          "body":     ["Inter"],
+          "label":    ["Inter"]
+        },
+        borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      },
+    },
+  }
+</script>
+<style>
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+  }
+  body { background-color: #060e20; color: #dee5ff; font-family: 'Inter', sans-serif; }
+  .glass-panel { background: rgba(5,24,60,0.6); backdrop-filter: blur(12px); }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #060e20; }
+  ::-webkit-scrollbar-thumb { background: #2b4680; border-radius: 10px; }
+
+  /* Terminal log scrollback */
+  #live-log { scrollbar-width: thin; scrollbar-color: #2b4680 transparent; }
+  /* Pulse ring for status dot */
+  @keyframes ring-pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(78,222,163,0.5); }
+    70%  { box-shadow: 0 0 0 6px rgba(78,222,163,0); }
+    100% { box-shadow: 0 0 0 0   rgba(78,222,163,0); }
+  }
+  .live-ring { animation: ring-pulse 1.8s infinite; }
+  /* Stage progress-bar animation */
+  .bar-animated { transition: width 0.6s ease-out; }
+  /* Drag-over highlight */
+  .dropzone-active { border-color: #4edea3 !important; background: rgba(78,222,163,0.04) !important; }
+  /* Monospace for passwords */
+  .font-mono-pwd { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 11px; }
+</style>
+</head>
+<body class="antialiased overflow-hidden">
+
+<!-- ═══ TOP APP BAR ═══════════════════════════════════════════════════════ -->
+<header class="flex justify-between items-center w-full px-8 py-4 bg-[#060e20] fixed top-0 z-50 border-b border-white/5">
+  <div class="text-xl font-bold tracking-wider text-[#4edea3] font-headline">Obsidian Sentinel</div>
+  <nav class="hidden md:flex gap-8 items-center">
+    <a class="text-slate-400 hover:text-white transition-colors font-headline font-bold tracking-tight text-sm" href="#">Dashboard</a>
+    <a class="text-slate-400 hover:text-white transition-colors font-headline font-bold tracking-tight text-sm" href="#">File History</a>
+    <a class="text-slate-400 hover:text-white transition-colors font-headline font-bold tracking-tight text-sm" href="#">Security Settings</a>
+  </nav>
+  <div class="flex items-center gap-4">
+    <!-- Server status -->
+    <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" id="srv-indicator">
+      <span class="w-2 h-2 rounded-full bg-slate-600" id="srv-dot"></span>
+      <span class="text-slate-500" id="srv-label">Connecting…</span>
+    </div>
+    <button class="p-2 hover:bg-white/5 transition-all duration-200 rounded-full text-slate-400">
+      <span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+    </button>
+    <button class="p-2 hover:bg-white/5 transition-all duration-200 rounded-full text-slate-400">
+      <span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+    </button>
+  </div>
+</header>
+
+<!-- ═══ SIDE NAV ══════════════════════════════════════════════════════════ -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 pt-20 bg-[#05183c] border-r border-white/5 w-64 shadow-2xl shadow-black/50 z-40">
+  <div class="px-6 py-4 mb-6">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center border border-outline-variant/30">
+        <span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1;">security</span>
+      </div>
+      <div>
+        <div class="text-[#4edea3] font-bold text-sm">Sentinel Ops</div>
+        <div class="text-[10px] text-slate-500 uppercase tracking-widest font-medium">Pentest Lab Mode</div>
+      </div>
+    </div>
+  </div>
+  <nav class="flex-1 space-y-1">
+    <a class="flex items-center gap-3 px-6 py-3 bg-[#031d4b] text-[#4edea3] border-l-4 border-[#4edea3] font-label text-xs font-medium uppercase tracking-widest" href="#">
+      <span class="material-symbols-outlined">analytics</span> Document Analysis
+    </a>
+    <a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-[#4edea3] hover:bg-[#031d4b]/50 font-label text-xs font-medium uppercase tracking-widest transition-all" href="#">
+      <span class="material-symbols-outlined">enhanced_encryption</span> Decryption Tasks
+    </a>
+    <a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-[#4edea3] hover:bg-[#031d4b]/50 font-label text-xs font-medium uppercase tracking-widest transition-all" href="#">
+      <span class="material-symbols-outlined">terminal</span> System Logs
+    </a>
+  </nav>
+  <!-- Methodology quick-ref -->
+  <div class="px-6 py-4 border-t border-white/5 space-y-2">
+    <div class="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-3">Attack Phases</div>
+    <div class="flex items-center gap-2 text-[11px] text-slate-400">
+      <span class="material-symbols-outlined text-sm text-primary">looks_one</span> Encryption Probe
+    </div>
+    <div class="flex items-center gap-2 text-[11px] text-slate-400">
+      <span class="material-symbols-outlined text-sm text-primary">looks_two</span> Markov Matrix Load
+    </div>
+    <div class="flex items-center gap-2 text-[11px] text-slate-400">
+      <span class="material-symbols-outlined text-sm text-primary">looks_3</span> Dictionary Phase
+    </div>
+    <div class="flex items-center gap-2 text-[11px] text-slate-400">
+      <span class="material-symbols-outlined text-sm text-primary">looks_4</span> Neural-Weighted Gen
+    </div>
+  </div>
+  <div class="pb-12 border-t border-white/5 pt-4">
+    <a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-[#4edea3] transition-all font-label text-xs font-medium uppercase tracking-widest" href="#">
+      <span class="material-symbols-outlined">settings</span> Settings
+    </a>
+    <a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-[#4edea3] transition-all font-label text-xs font-medium uppercase tracking-widest" href="#">
+      <span class="material-symbols-outlined">help</span> Support
+    </a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CANVAS ═══════════════════════════════════════════════════════ -->
+<main class="ml-64 pt-24 pb-12 px-10 h-screen overflow-y-auto bg-surface relative" id="main-scroll">
+  <!-- Decorative bloom -->
+  <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -mr-64 -mt-64 pointer-events-none"></div>
+
+  <div class="max-w-6xl mx-auto grid grid-cols-12 gap-10">
+
+    <!-- ── LEFT COLUMN (8/12) ──────────────────────────────────────────── -->
+    <div class="col-span-12 lg:col-span-8 space-y-8">
+
+      <header>
+        <h1 class="text-3xl font-headline font-bold text-on-surface leading-tight">Sentinel Analysis Suite</h1>
+        <p class="text-sm text-secondary-dim mt-2 max-w-xl">
+          Advanced forensic decryption · Markov-chain weighted password generation · Live attack telemetry
+        </p>
+      </header>
+
+      <!-- FILE UPLOAD ZONE -->
+      <div class="relative group" id="upload-wrapper">
+        <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-transparent rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+        <div
+          id="drop-zone"
+          class="relative flex flex-col items-center justify-center p-16 border-2 border-dashed border-outline-variant/40 rounded-xl bg-surface-container-low hover:bg-surface-container transition-all duration-300 cursor-pointer"
+        >
+          <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+            <span class="material-symbols-outlined text-primary text-3xl" id="dz-icon">upload_file</span>
+          </div>
+          <h3 class="font-headline text-lg font-bold text-on-surface mb-2" id="dz-title">Initialize Secure Analysis</h3>
+          <p class="text-sm text-slate-500" id="dz-sub">
+            Drag and drop encrypted PDF or <label for="file-input" class="text-primary hover:underline cursor-pointer">browse files</label>
+          </p>
+          <input type="file" id="file-input" accept=".pdf,application/pdf" class="hidden"/>
+          <!-- File info (shown after selection) -->
+          <div id="file-info" class="hidden mt-6 text-center">
+            <div class="inline-flex items-center gap-3 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg">
+              <span class="material-symbols-outlined text-primary text-lg">description</span>
+              <span class="text-sm text-on-surface font-semibold" id="file-name-display">—</span>
+              <span class="text-xs text-slate-500" id="file-size-display">—</span>
+              <button id="btn-clear" class="text-slate-500 hover:text-error transition-colors ml-2">
+                <span class="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+          </div>
+          <div class="mt-8 flex gap-4 text-[10px] uppercase tracking-widest font-bold text-slate-600">
+            <span>Max 50 MB</span>
+            <span class="w-1 h-1 bg-slate-700 rounded-full my-auto"></span>
+            <span>AES-256 Support</span>
+            <span class="w-1 h-1 bg-slate-700 rounded-full my-auto"></span>
+            <span>RC4 / Standard Encryption</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- INITIATE ATTACK BUTTON -->
+      <div class="flex gap-4 items-center">
+        <button
+          id="btn-crack"
+          disabled
+          class="px-8 py-3 bg-gradient-to-r from-primary to-primary-dim text-on-primary font-headline font-bold rounded shadow-md hover:brightness-110 transition-all text-sm flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:brightness-100"
+        >
+          <span class="material-symbols-outlined text-lg" id="crack-btn-icon">play_arrow</span>
+          <span id="crack-btn-label">Initiate Attack</span>
+        </button>
+        <div id="attack-pulse" class="hidden items-center gap-2 text-xs text-primary font-bold tracking-widest uppercase">
+          <span class="w-2 h-2 bg-primary rounded-full animate-pulse live-ring"></span>
+          Engine Active
+        </div>
+      </div>
+
+      <!-- OPERATIONAL STATUS — STAGE PIPELINE -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between px-2">
+          <h4 class="text-base font-headline font-bold text-on-surface">Operational Status</h4>
+          <span class="text-[10px] text-primary font-bold tracking-widest uppercase flex items-center gap-2" id="ops-live-badge" style="display:none!important;">
+            <span class="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+            Live Processor Active
+          </span>
+        </div>
+
+        <div class="bg-surface-container rounded-lg divide-y divide-white/5 overflow-hidden" id="stages-panel">
+
+          <!-- STAGE 1: Encryption Probe -->
+          <div class="p-5 flex items-center gap-6" id="stage-1">
+            <div class="w-8 h-8 rounded bg-slate-800/60 flex items-center justify-center flex-shrink-0" id="s1-icon-wrap">
+              <span class="material-symbols-outlined text-slate-500 text-sm" id="s1-icon">radio_button_unchecked</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-end mb-1">
+                <span class="text-sm font-semibold text-slate-400" id="s1-title">Encryption Probe</span>
+                <span class="text-xs font-mono tracking-tighter text-slate-600" id="s1-badge">PENDING</span>
+              </div>
+              <div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+                <div class="bg-primary h-1 rounded-full bar-animated" id="s1-bar" style="width:0%"></div>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-1" id="s1-detail">Loads PDF binary · validates encryption header via pdf-lib</p>
+            </div>
+          </div>
+
+          <!-- STAGE 2: Markov Matrix -->
+          <div class="p-5 flex items-center gap-6" id="stage-2">
+            <div class="w-8 h-8 rounded bg-slate-800/60 flex items-center justify-center flex-shrink-0" id="s2-icon-wrap">
+              <span class="material-symbols-outlined text-slate-500 text-sm" id="s2-icon">radio_button_unchecked</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-end mb-1">
+                <span class="text-sm font-semibold text-slate-400" id="s2-title">Markov Weight Matrix</span>
+                <span class="text-xs font-mono tracking-tighter text-slate-600" id="s2-badge">PENDING</span>
+              </div>
+              <div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+                <div class="bg-primary h-1 rounded-full bar-animated" id="s2-bar" style="width:0%"></div>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-1" id="s2-detail">Loads character P(c<sub>n+1</sub>|c<sub>n</sub>) transition weights from training corpus</p>
+            </div>
+          </div>
+
+          <!-- STAGE 3: Dictionary Phase -->
+          <div class="p-5 flex items-center gap-6" id="stage-3">
+            <div class="w-8 h-8 rounded bg-slate-800/60 flex items-center justify-center flex-shrink-0" id="s3-icon-wrap">
+              <span class="material-symbols-outlined text-slate-500 text-sm" id="s3-icon">radio_button_unchecked</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-end mb-1">
+                <span class="text-sm font-semibold text-slate-400" id="s3-title">Dictionary Attack Phase</span>
+                <span class="text-xs font-mono tracking-tighter text-slate-600" id="s3-badge">PENDING</span>
+              </div>
+              <div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+                <div class="bg-primary h-1 rounded-full bar-animated" id="s3-bar" style="width:0%"></div>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-1" id="s3-detail">Exhausts curated wordlist · common/leaked credentials</p>
+            </div>
+          </div>
+
+          <!-- STAGE 4: Neural-Weighted Generation -->
+          <div class="p-5 flex items-center gap-6" id="stage-4">
+            <div class="w-8 h-8 rounded bg-slate-800/60 flex items-center justify-center flex-shrink-0" id="s4-icon-wrap">
+              <span class="material-symbols-outlined text-slate-500 text-sm" id="s4-icon">radio_button_unchecked</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-end mb-1">
+                <span class="text-sm font-semibold text-slate-400" id="s4-title">Neural-Weighted Generation</span>
+                <span class="text-xs font-mono tracking-tighter text-slate-600" id="s4-badge">PENDING</span>
+              </div>
+              <div class="w-full bg-surface-container-high h-1 rounded-full overflow-hidden">
+                <div class="bg-primary h-1 rounded-full bar-animated" id="s4-bar" style="width:0%"></div>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-1" id="s4-detail">Markov-sampled candidates · seed → weighted chain expansion</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LIVE ATTACK CONSOLE (hidden until cracking starts) -->
+      <div id="live-console" class="hidden bg-surface-container rounded-lg border border-outline-variant/20 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 bg-surface-container-high border-b border-white/5">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500/70"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500/70"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-primary/70"></span>
+            <span class="text-xs text-slate-500 ml-2 font-mono">sentinel_engine_v2 — live output</span>
+          </div>
+          <span class="text-[10px] font-mono text-primary" id="console-phase-label">—</span>
+        </div>
+        <!-- Key metrics strip -->
+        <div class="grid grid-cols-4 divide-x divide-white/5 border-b border-white/5">
+          <div class="px-5 py-3 text-center">
+            <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Attempts</div>
+            <div class="text-lg font-bold font-mono text-on-surface" id="c-attempts">0</div>
+          </div>
+          <div class="px-5 py-3 text-center">
+            <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Rate</div>
+            <div class="text-lg font-bold font-mono text-primary" id="c-rate">— p/s</div>
+          </div>
+          <div class="px-5 py-3 text-center">
+            <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Elapsed</div>
+            <div class="text-lg font-bold font-mono text-on-surface" id="c-elapsed">0.0s</div>
+          </div>
+          <div class="px-5 py-3 text-center">
+            <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Phase</div>
+            <div class="text-lg font-bold font-mono text-on-surface" id="c-phase">—</div>
+          </div>
+        </div>
+        <!-- Current password being tested -->
+        <div class="px-5 py-2 bg-black/20 flex items-center gap-3 border-b border-white/5">
+          <span class="text-primary font-mono text-xs font-bold">&gt; TESTING:</span>
+          <span class="text-on-surface font-mono text-sm font-bold tracking-wide" id="c-current-pwd">—</span>
+        </div>
+        <!-- Log feed -->
+        <div class="max-h-36 overflow-y-auto px-5 py-3 space-y-0.5 font-mono text-[11px]" id="live-log"></div>
+      </div>
+
+      <!-- SUCCESS CARD (hidden until password found) -->
+      <div id="success-card" class="hidden glass-panel border-l-4 border-primary p-8 rounded-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-10">
+          <span class="material-symbols-outlined text-[120px]">verified_user</span>
+        </div>
+        <div class="flex items-start gap-6 relative z-10">
+          <div class="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/20 flex-shrink-0">
+            <span class="material-symbols-outlined text-on-primary text-2xl" style="font-variation-settings:'FILL' 1;">lock_open</span>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-xl font-headline font-bold text-on-surface mb-1">Decryption Successful</h3>
+            <p class="text-xs text-slate-400 mb-3 font-mono">
+              PASSWORD RECOVERED: <span class="text-primary font-bold text-sm" id="found-password-display">—</span>
+            </p>
+            <p class="text-sm text-slate-300 mb-4 leading-relaxed" id="success-meta">—</p>
+            <div class="flex items-center gap-4 flex-wrap">
+              <button id="btn-download" class="hidden px-6 py-2.5 bg-gradient-to-r from-primary to-primary-dim text-on-primary font-headline font-bold rounded shadow-md hover:brightness-110 transition-all text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-lg">download</span>
+                Download Decrypted PDF
+              </button>
+              <div class="text-xs text-slate-400 font-mono" id="manual-pwd-hint"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FAILURE CARD (hidden until failed) -->
+      <div id="failure-card" class="hidden glass-panel border-l-4 border-error/70 p-8 rounded-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-10">
+          <span class="material-symbols-outlined text-[120px] text-error">lock</span>
+        </div>
+        <div class="flex items-start gap-6 relative z-10">
+          <div class="w-14 h-14 rounded-full bg-error-container flex items-center justify-center shadow-lg flex-shrink-0">
+            <span class="material-symbols-outlined text-error text-2xl" style="font-variation-settings:'FILL' 1;">lock</span>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-xl font-headline font-bold text-error mb-2">Attack Exhausted</h3>
+            <p class="text-sm text-slate-300 leading-relaxed" id="failure-meta">Password not found within time or attempt limits.</p>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /left column -->
+
+    <!-- ── RIGHT COLUMN (4/12) ─────────────────────────────────────────── -->
+    <div class="col-span-12 lg:col-span-4 space-y-8">
+
+      <!-- PROCESSOR TELEMETRY -->
+      <div class="bg-surface-container-high p-8 rounded-xl border border-white/5">
+        <h3 class="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-8">Processor Telemetry</h3>
+        <div class="space-y-7">
+          <!-- Decryption Velocity -->
+          <div>
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs font-semibold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm text-primary">speed</span>
+                Decryption Velocity
+              </span>
+              <span class="text-xs font-mono text-primary" id="t-rate">— p/s</span>
+            </div>
+            <div class="w-full h-1.5 bg-surface-container-lowest rounded-full p-[1px]">
+              <div class="bg-primary h-full rounded-full bar-animated shadow-[0_0_8px_rgba(78,222,163,0.3)]" id="t-rate-bar" style="width:0%"></div>
+            </div>
+          </div>
+          <!-- Wordlist Coverage -->
+          <div>
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs font-semibold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm text-primary">database</span>
+                Wordlist Coverage
+              </span>
+              <span class="text-xs font-mono text-primary" id="t-wl-pct">0%</span>
+            </div>
+            <div class="w-full h-1.5 bg-surface-container-lowest rounded-full p-[1px]">
+              <div class="bg-primary h-full rounded-full bar-animated shadow-[0_0_8px_rgba(78,222,163,0.3)]" id="t-wl-bar" style="width:0%"></div>
+            </div>
+          </div>
+          <!-- Attack Progress -->
+          <div>
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs font-semibold text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm text-primary">memory</span>
+                Attack Progress
+              </span>
+              <span class="text-xs font-mono text-primary" id="t-progress-pct">0%</span>
+            </div>
+            <div class="w-full h-1.5 bg-surface-container-lowest rounded-full p-[1px]">
+              <div class="bg-primary h-full rounded-full bar-animated shadow-[0_0_8px_rgba(78,222,163,0.3)]" id="t-progress-bar" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE RECORDS / FEED -->
+      <div class="bg-surface-container p-6 rounded-xl border border-white/5">
+        <h3 class="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-4">Attack Intelligence</h3>
+
+        <!-- Static (pre-attack) -->
+        <div id="intel-static" class="space-y-4">
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-primary text-sm mt-0.5">info</span>
+            <p class="text-xs text-slate-400 leading-relaxed"><span class="text-on-surface font-semibold">Phase 1 — Dictionary:</span> Tests known leaked passwords and common patterns first for fast hits.</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-primary text-sm mt-0.5">psychology</span>
+            <p class="text-xs text-slate-400 leading-relaxed"><span class="text-on-surface font-semibold">Phase 2 — Markov:</span> Each character sampled from P(c<sub>n+1</sub>|c<sub>n</sub>) weight matrix trained on 10M+ real passwords.</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-primary text-sm mt-0.5">timer</span>
+            <p class="text-xs text-slate-400 leading-relaxed"><span class="text-on-surface font-semibold">Limits:</span> 500,000 attempts max · 3 min timeout. Targets generic/common PDF passwords.</p>
+          </div>
+        </div>
+
+        <!-- Dynamic (during attack) -->
+        <div id="intel-live" class="hidden space-y-2">
+          <div class="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-3">Recent Candidates</div>
+          <div id="pwd-feed-list" class="space-y-1 max-h-40 overflow-y-auto font-mono text-[11px]"></div>
+        </div>
+      </div>
+
+      <!-- SAFETY SCORE GAUGE -->
+      <div class="flex flex-col items-center justify-center p-8 bg-surface-container-lowest rounded-xl border border-white/5 shadow-inner">
+        <div class="relative w-32 h-32 flex items-center justify-center">
+          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 128 128">
+            <circle class="text-surface-container-high" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-width="4"></circle>
+            <circle class="text-primary" cx="64" cy="64" fill="transparent" r="58"
+              stroke="currentColor"
+              stroke-dasharray="364.4"
+              stroke-dashoffset="364.4"
+              stroke-width="4"
+              id="gauge-circle"
+              style="transition: stroke-dashoffset 1s ease-out;"
+            ></circle>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-2xl font-headline font-bold text-on-surface" id="gauge-score">—</span>
+            <span class="text-[8px] text-slate-500 uppercase tracking-tighter" id="gauge-label">Idle</span>
+          </div>
+        </div>
+        <div class="mt-4 text-center">
+          <p class="text-[10px] font-bold uppercase tracking-widest" id="gauge-status-text" style="color:#4edea3">Awaiting Target</p>
+        </div>
+      </div>
+
+    </div><!-- /right column -->
+  </div><!-- /grid -->
+</main>
+
+<!-- ═══ BOTTOM STATUS BAR ═════════════════════════════════════════════════ -->
+<footer class="fixed bottom-0 left-0 w-full z-50 flex justify-between items-center px-6 gap-8 bg-[#000000] border-t border-white/5 h-8 opacity-80">
+  <div class="text-[10px] text-slate-600 font-label uppercase tracking-widest">
+    Obsidian Sentinel — Penetration Testing Demonstration Tool
+  </div>
+  <div class="flex items-center gap-6">
+    <div class="flex items-center gap-2 font-label text-[10px] font-semibold uppercase" id="footer-sys">
+      <span class="material-symbols-outlined text-xs text-slate-500">radio_button_checked</span>
+      <span class="text-slate-500">IDLE</span>
+    </div>
+    <div class="flex items-center gap-2 text-slate-500 font-label text-[10px] font-semibold uppercase">
+      <span class="material-symbols-outlined text-xs">hub</span>
+      Connected
+    </div>
+    <div class="flex items-center gap-2 text-slate-500 font-label text-[10px] font-semibold uppercase">
+      <span class="material-symbols-outlined text-xs">info</span>
+      v2.4.0
+    </div>
+  </div>
+</footer>
+
+<!-- ═══ APPLICATION LOGIC ══════════════════════════════════════════════════ -->
+<script>
+const API = 'http://localhost:3001';
+const MAX_ATTEMPTS = 500000;
+let state = { file: null, sessionId: null, cracking: false, wordlistCount: 0 };
+
+// ── DOM ──────────────────────────────────────────────────────────────────
+const dropZone      = document.getElementById('drop-zone');
+const fileInput     = document.getElementById('file-input');
+const fileInfo      = document.getElementById('file-info');
+const fileNameEl    = document.getElementById('file-name-display');
+const fileSizeEl    = document.getElementById('file-size-display');
+const btnClear      = document.getElementById('btn-clear');
+const btnCrack      = document.getElementById('btn-crack');
+const crackIcon     = document.getElementById('crack-btn-icon');
+const crackLabel    = document.getElementById('crack-btn-label');
+const attackPulse   = document.getElementById('attack-pulse');
+const opsLiveBadge  = document.getElementById('ops-live-badge');
+const liveConsole   = document.getElementById('live-console');
+const successCard   = document.getElementById('success-card');
+const failureCard   = document.getElementById('failure-card');
+const btnDownload   = document.getElementById('btn-download');
+const liveLog       = document.getElementById('live-log');
+const pwdFeed       = document.getElementById('pwd-feed-list');
+const intelStatic   = document.getElementById('intel-static');
+const intelLive     = document.getElementById('intel-live');
+
+// ── Health check ────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch(`${API}/api/health`);
+    if (r.ok) {
+      document.getElementById('srv-dot').className   = 'w-2 h-2 rounded-full bg-primary animate-pulse';
+      document.getElementById('srv-label').className = 'text-primary text-xs font-semibold uppercase tracking-wider';
+      document.getElementById('srv-label').textContent = 'Server Online';
+    } else throw new Error();
+  } catch {
+    document.getElementById('srv-dot').className   = 'w-2 h-2 rounded-full bg-error';
+    document.getElementById('srv-label').textContent = 'Server Offline';
+  }
+})();
+
+// ── File handling ────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dropzone-active'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dropzone-active'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dropzone-active');
+  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+});
+dropZone.addEventListener('click', e => {
+  if (e.target === fileInput || e.target.tagName === 'LABEL') return;
+  fileInput.click();
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+btnClear.addEventListener('click', e => { e.stopPropagation(); clearFile(); });
+btnCrack.addEventListener('click', startCrack);
+
+function setFile(f) {
+  if (!f.name.toLowerCase().endsWith('.pdf') && f.type !== 'application/pdf') {
+    alert('[!] Only PDF files are supported.'); return;
+  }
+  state.file = f;
+  fileNameEl.textContent = f.name;
+  fileSizeEl.textContent = fmtBytes(f.size);
+  fileInfo.classList.remove('hidden');
+  document.getElementById('dz-title').textContent = 'Target Acquired';
+  document.getElementById('dz-sub').innerHTML = 'File loaded and ready for analysis';
+  document.getElementById('dz-icon').textContent = 'task_alt';
+  btnCrack.disabled = false;
+  resetUI();
+}
+
+function clearFile() {
+  state.file = null; fileInput.value = '';
+  fileInfo.classList.add('hidden');
+  document.getElementById('dz-title').textContent = 'Initialize Secure Analysis';
+  document.getElementById('dz-sub').innerHTML = `Drag and drop encrypted PDF or <label for="file-input" class="text-primary hover:underline cursor-pointer">browse files</label>`;
+  document.getElementById('dz-icon').textContent = 'upload_file';
+  btnCrack.disabled = true;
+  resetUI();
+}
+
+// ── Stage helpers ────────────────────────────────────────────────────────
+function stageSet(n, status, badge, barPct, detail) {
+  const s = document.getElementById(`stage-${n}`);
+  const iconWrap = document.getElementById(`s${n}-icon-wrap`);
+  const icon     = document.getElementById(`s${n}-icon`);
+  const badgeEl  = document.getElementById(`s${n}-badge`);
+  const bar      = document.getElementById(`s${n}-bar`);
+  const titleEl  = document.getElementById(`s${n}-title`);
+  const detailEl = document.getElementById(`s${n}-detail`);
+
+  // Clear all state classes
+  iconWrap.className = 'w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ';
+  icon.className = 'material-symbols-outlined text-sm ';
+
+  if (status === 'idle') {
+    iconWrap.className += 'bg-slate-800/60';
+    icon.className += 'text-slate-500';
+    icon.textContent = 'radio_button_unchecked';
+    badgeEl.className = 'text-xs font-mono tracking-tighter text-slate-600';
+    titleEl.className = 'text-sm font-semibold text-slate-400';
+  } else if (status === 'running') {
+    iconWrap.className += 'bg-primary/10';
+    icon.className += 'text-primary animate-spin';
+    icon.textContent = 'sync';
+    badgeEl.className = 'text-xs font-mono tracking-tighter text-primary font-bold';
+    titleEl.className = 'text-sm font-semibold text-on-surface';
+  } else if (status === 'done') {
+    iconWrap.className += 'bg-primary/10';
+    icon.className += 'text-primary';
+    icon.style.fontVariationSettings = "'FILL' 1";
+    icon.textContent = 'check_circle';
+    badgeEl.className = 'text-xs font-mono tracking-tighter text-primary font-bold';
+    titleEl.className = 'text-sm font-semibold text-on-surface';
+  } else if (status === 'fail') {
+    iconWrap.className += 'bg-error-container/30';
+    icon.className += 'text-error';
+    icon.textContent = 'cancel';
+    badgeEl.className = 'text-xs font-mono tracking-tighter text-error font-bold';
+    titleEl.className = 'text-sm font-semibold text-error';
+  }
+
+  if (badge)   badgeEl.textContent  = badge;
+  if (barPct != null) bar.style.width = barPct + '%';
+  if (detail)  detailEl.innerHTML   = detail;
+}
+
+function resetUI() {
+  [1,2,3,4].forEach(n => stageSet(n, 'idle', 'PENDING', 0, null));
+  liveConsole.classList.add('hidden');
+  successCard.classList.add('hidden');
+  failureCard.classList.add('hidden');
+  attackPulse.classList.add('hidden');
+  opsLiveBadge.style.display = 'none';
+  setTelemetry(0, 0, 0);
+  setGauge(null, 'Idle', 'Awaiting Target', '#4edea3');
+  setFooter('IDLE', false);
+  liveLog.innerHTML = '';
+  pwdFeed.innerHTML = '';
+  intelStatic.classList.remove('hidden');
+  intelLive.classList.add('hidden');
+}
+
+// ── Telemetry helpers ────────────────────────────────────────────────────
+function setTelemetry(rate, wlPct, progressPct) {
+  const ratePct = Math.min(100, (rate / 5000) * 100);
+  document.getElementById('t-rate').textContent      = rate > 0 ? `${rate.toLocaleString()} p/s` : '— p/s';
+  document.getElementById('t-rate-bar').style.width  = ratePct + '%';
+  document.getElementById('t-wl-pct').textContent    = Math.round(wlPct) + '%';
+  document.getElementById('t-wl-bar').style.width    = wlPct + '%';
+  document.getElementById('t-progress-pct').textContent = Math.round(progressPct) + '%';
+  document.getElementById('t-progress-bar').style.width  = progressPct + '%';
+}
+
+function setGauge(score, label, statusText, colour) {
+  const circle = document.getElementById('gauge-circle');
+  const circumference = 364.4;
+  const scoreEl = document.getElementById('gauge-score');
+  const labelEl = document.getElementById('gauge-label');
+  const statusEl = document.getElementById('gauge-status-text');
+
+  if (score === null) {
+    circle.style.strokeDashoffset = circumference; // empty
+    scoreEl.textContent = '—';
+  } else {
+    const offset = circumference - (score / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+    scoreEl.textContent = score;
+  }
+  labelEl.textContent = label;
+  statusEl.textContent = statusText;
+  statusEl.style.color = colour;
+}
+
+function setFooter(text, active) {
+  const el = document.getElementById('footer-sys');
+  el.innerHTML = `<span class="material-symbols-outlined text-xs ${active ? 'text-primary' : 'text-slate-500'}">radio_button_checked</span>
+    <span class="${active ? 'text-primary' : 'text-slate-500'} font-label text-[10px] font-semibold uppercase">${text}</span>`;
+}
+
+// ── Log helpers ──────────────────────────────────────────────────────────
+const logBuffer = [];
+function addLog(msg, colour = 'text-slate-500') {
+  const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  logBuffer.push({ ts, msg, colour });
+  if (logBuffer.length > 100) logBuffer.shift();
+  renderLog();
+}
+function renderLog() {
+  liveLog.innerHTML = logBuffer.map(l =>
+    `<div class="flex gap-2"><span class="text-slate-700">[${l.ts}]</span><span class="${l.colour}">${esc(l.msg)}</span></div>`
+  ).join('');
+  liveLog.scrollTop = liveLog.scrollHeight;
+}
+
+const pwdBuffer = [];
+function addPwdFeed(pwd) {
+  pwdBuffer.push(pwd);
+  if (pwdBuffer.length > 8) pwdBuffer.shift();
+  pwdFeed.innerHTML = pwdBuffer.map((p, i) =>
+    `<div class="flex items-center gap-2 py-0.5">
+       <span class="text-slate-700">${(i + 1).toString().padStart(2, '0')}.</span>
+       <span class="text-slate-400">${esc(p)}</span>
+     </div>`
+  ).join('');
+  pwdFeed.scrollTop = pwdFeed.scrollHeight;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmtBytes(b) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024*1024) return `${(b/1024).toFixed(1)} KB`;
+  return `${(b/1024/1024).toFixed(2)} MB`;
+}
+
+// ── Main Attack ──────────────────────────────────────────────────────────
+async function startCrack() {
+  if (!state.file || state.cracking) return;
+  state.cracking = true;
+  logBuffer.length = 0; pwdBuffer.length = 0;
+
+  btnCrack.disabled = true;
+  crackIcon.textContent = 'hourglass_top';
+  crackLabel.textContent = 'Initializing…';
+  attackPulse.classList.remove('hidden');
+  opsLiveBadge.style.display = 'flex';
+  liveConsole.classList.remove('hidden');
+  intelStatic.classList.add('hidden');
+  intelLive.classList.remove('hidden');
+  successCard.classList.add('hidden');
+  failureCard.classList.add('hidden');
+
+  setGauge(50, 'Active', 'Attack In Progress', '#4edea3');
+  setFooter('PROCESSING', true);
+
+  addLog('Sentinel engine initiated · target PDF loaded into memory', 'text-primary');
+
+  const formData = new FormData();
+  formData.append('pdf', state.file);
+
+  try {
+    const response = await fetch(`${API}/api/crack`, { method: 'POST', body: formData });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(err.error || 'Server error');
+    }
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
+      for (const chunk of parts) handleSSEChunk(chunk);
+    }
+  } catch (err) {
+    addLog(`[!] ${err.message}`, 'text-error');
+    alert(`Connection error: ${err.message}\n\nMake sure the server is running:\n  cd f:\\PDF-Bruteforce-cracker\\server\n  npm install && node server.js`);
+  } finally {
+    state.cracking = false;
+    btnCrack.disabled = false;
+    crackIcon.textContent = 'play_arrow';
+    crackLabel.textContent = 'Initiate Attack';
+    attackPulse.classList.add('hidden');
+    opsLiveBadge.style.display = 'none';
+    setFooter('COMPLETE', false);
+  }
+}
+
+// ── SSE Parser ────────────────────────────────────────────────────────────
+function handleSSEChunk(chunk) {
+  let type = '', data = '';
+  for (const line of chunk.split('\n')) {
+    if (line.startsWith('event: ')) type = line.slice(7).trim();
+    else if (line.startsWith('data: '))  data = line.slice(6).trim();
+  }
+  if (!data) return;
+  let d;
+  try { d = JSON.parse(data); } catch { return; }
+  handleEvent(type, d);
+}
+
+function handleEvent(type, d) {
+  switch (type) {
+
+    case 'session':
+      state.sessionId = d.sessionId;
+      addLog(`Session established: ${d.sessionId.slice(-8).toUpperCase()}`, 'text-slate-400');
+      break;
+
+    case 'init':
+      stageSet(1, 'done', 'COMPLETE', 100,
+        d.encrypted
+          ? `Encryption confirmed · AES/RC4 · File size: ${fmtBytes(d.bufferSize)}`
+          : `No encryption detected · ${fmtBytes(d.bufferSize)}`
+      );
+      if (!d.encrypted) {
+        stageSet(2, 'idle', 'N/A', 0, null);
+        stageSet(3, 'idle', 'N/A', 0, null);
+        stageSet(4, 'idle', 'N/A', 0, null);
+        addLog('PDF is not password-protected — no attack needed', 'text-yellow-400');
+        setGauge(100, 'Clear', 'No Encryption', '#4edea3');
+      } else {
+        addLog(`Encryption confirmed · ${fmtBytes(d.bufferSize)} · loading weight matrix…`, 'text-primary');
+        stageSet(2, 'running', 'LOADING…', 30, null);
+      }
+      break;
+
+    case 'not_encrypted':
+      addLog('Target is not encrypted — nothing to crack', 'text-yellow-400');
+      break;
+
+    case 'wordlist_loaded':
+      state.wordlistCount = d.count;
+      stageSet(2, 'done', 'COMPLETE', 100,
+        `Markov weight matrix loaded · Wordlist: ${d.count.toLocaleString()} entries · 86 char classes`
+      );
+      stageSet(3, 'running', 'ACTIVE', 1,
+        `Testing all ${d.count.toLocaleString()} dictionary entries — row by row until match or exhausted`
+      );
+      crackLabel.textContent = 'Attack Running…';
+      addLog(`Wordlist loaded · ${d.count.toLocaleString()} entries · Phase 1: Dictionary sweep starting`, 'text-primary');
+      break;
+
+    case 'progress': {
+      const { attempts, rate, currentPassword: pwd, elapsedTime: elapsed, phase, rowNumber } = d;
+      const isDict   = phase === 'dictionary';
+      const phaseTxt = isDict ? 'DICT' : 'MARKOV';
+
+      // Console metrics
+      document.getElementById('c-attempts').textContent = attempts.toLocaleString();
+      document.getElementById('c-rate').textContent     = `${rate.toLocaleString()} p/s`;
+      document.getElementById('c-elapsed').textContent  = `${elapsed.toFixed(1)}s`;
+      document.getElementById('c-phase').textContent    = phaseTxt;
+      document.getElementById('c-current-pwd').textContent = pwd;
+      document.getElementById('console-phase-label').textContent =
+        isDict
+          ? `Phase I: Dictionary (row ${(rowNumber || attempts).toLocaleString()} / ${state.wordlistCount.toLocaleString()})`
+          : 'Phase II: Neural-Weighted Markov';
+
+      // Stage progress bars
+      if (isDict && state.wordlistCount > 0) {
+        const pct = Math.min(99, (attempts / state.wordlistCount) * 100);
+        stageSet(3, 'running', `${Math.round(pct)}%`, pct,
+          `Row ${(rowNumber||attempts).toLocaleString()} / ${state.wordlistCount.toLocaleString()} · ${rate.toLocaleString()} p/s`);
+        stageSet(4, 'idle', 'PENDING', 0, null);
+      } else {
+        stageSet(3, 'done', 'COMPLETE', 100, null);
+        const markovDone = attempts - state.wordlistCount;
+        const pct2 = Math.min(95, (markovDone / MAX_ATTEMPTS) * 100);
+        stageSet(4, 'running', `${Math.round(Math.max(0, pct2))}%`, Math.max(0, pct2),
+          `${markovDone.toLocaleString()} Markov candidates tested · ${rate.toLocaleString()} p/s`);
+      }
+
+      // Telemetry
+      const wlPct      = state.wordlistCount > 0 ? Math.min(100, (attempts / state.wordlistCount) * 100) : 100;
+      const progressPct = Math.min(100, (attempts / (MAX_ATTEMPTS + state.wordlistCount)) * 100);
+      setTelemetry(rate, isDict ? wlPct : 100, progressPct);
+
+      const confidence = Math.min(95, 10 + progressPct * 0.85);
+      setGauge(Math.round(confidence), 'Scanning', 'Attack Active', '#4edea3');
+
+      addPwdFeed(pwd);
+      addLog(
+        `${phaseTxt.padEnd(5)} | row ${String(rowNumber||'—').padStart(6)} | `+
+        `${attempts.toLocaleString().padStart(7)} att | ${rate.toLocaleString().padStart(6)} p/s | ${pwd.substring(0,28)}`,
+        'text-slate-400'
+      );
+      break;
+    }
+
+    case 'phase_change': {
+      // Dictionary exhausted — switching to Markov
+      addLog(`─── Phase 1 complete: ${d.wordlistCount.toLocaleString()} entries tested in ${d.elapsedTime.toFixed(2)}s — no match ───`, 'text-yellow-400');
+      addLog('─── Phase 2 starting: Neural-Weighted Markov generation ───', 'text-primary');
+      stageSet(3, 'done', 'EXHAUSTED', 100,
+        `All ${d.wordlistCount.toLocaleString()} dictionary entries tested · no match · elapsed ${d.elapsedTime.toFixed(2)}s`);
+      stageSet(4, 'running', 'ACTIVE', 1, 'Markov-weighted generation underway');
+      document.getElementById('console-phase-label').textContent = 'Phase II: Neural-Weighted Markov';
+      break;
+    }
+
+    case 'found': {
+      const isDict = d.foundInPhase === 'dictionary';
+      stageSet(3, 'done', 'COMPLETE', 100, null);
+      stageSet(4, isDict ? 'idle' : 'done', isDict ? 'N/A' : 'COMPLETE', isDict ? 0 : 100, null);
+
+      addLog(
+        `▶ PASSWORD CRACKED: "${d.password}" · Phase: ${d.foundInPhase?.toUpperCase()} ·` +
+        (d.rowNumber ? ` Row #${d.rowNumber.toLocaleString()}` : '') +
+        ` · ${d.attempts.toLocaleString()} attempts · ${d.time.toFixed(2)}s`,
+        'text-primary'
+      );
+
+      setGauge(100, 'Cracked', 'Key Recovered', '#4edea3');
+      setTelemetry(0, isDict ? Math.min(100, (d.attempts / state.wordlistCount) * 100) : 100, 100);
+
+      // Success card
+      successCard.classList.remove('hidden');
+      document.getElementById('found-password-display').textContent = d.password;
+
+      // Rich post-crack analysis
+      const rowInfo = d.rowNumber
+        ? `Found at wordlist row <strong>#${d.rowNumber.toLocaleString()}</strong> of ${state.wordlistCount.toLocaleString()} entries`
+        : `Found via Markov-weighted generation after ${state.wordlistCount.toLocaleString()} dictionary entries failed`;
+      document.getElementById('success-meta').innerHTML =
+        `<span class="font-mono text-xs">
+          File: <strong>${esc(state.file?.name||'—')}</strong> &nbsp;·&nbsp;
+          Phase: <strong>${isDict ? 'Phase 1 — Dictionary' : 'Phase 2 — Neural Markov'}</strong> &nbsp;·&nbsp;
+          ${rowInfo} &nbsp;·&nbsp;
+          Attempts: <strong>${d.attempts.toLocaleString()}</strong> &nbsp;·&nbsp;
+          Time: <strong>${d.time.toFixed(2)}s</strong>
+        </span>`;
+
+      // Post-crack analysis block (appended after the meta)
+      const analysisEl = document.createElement('div');
+      analysisEl.className = 'mt-4 grid grid-cols-2 gap-3';
+      const stats = [
+        { label: 'Recovered Password', val: d.password, highlight: true },
+        { label: 'Found In Phase',     val: isDict ? '① Dictionary' : '② Neural Markov' },
+        { label: 'Wordlist Row #',     val: d.rowNumber ? d.rowNumber.toLocaleString() : 'N/A (Markov)' },
+        { label: 'Total Attempts',     val: d.attempts.toLocaleString() },
+        { label: 'Time to Crack',      val: `${d.time.toFixed(2)} seconds` },
+        { label: 'Avg Rate',           val: d.time > 0 ? `${Math.round(d.attempts/d.time).toLocaleString()} p/s` : '—' },
+        { label: 'Dictionary Size',    val: `${state.wordlistCount.toLocaleString()} entries` },
+        { label: 'Attack Strategy',    val: isDict ? 'Dict-first (wordlist hit)' : 'Markov fallback' },
+      ];
+      analysisEl.innerHTML = stats.map(s =>
+        `<div class="bg-surface-container-high p-3 rounded">
+           <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-1">${s.label}</div>
+           <div class="text-sm font-mono font-bold ${s.highlight ? 'text-primary' : 'text-on-surface'}">${esc(String(s.val))}</div>
+         </div>`
+      ).join('');
+      document.getElementById('success-meta').after(analysisEl);
+
+      if (d.canDownload && d.sessionId) {
+        btnDownload.classList.remove('hidden');
+        btnDownload.onclick = () => {
+          const a = document.createElement('a');
+          a.href = `${API}/api/download/${d.sessionId}`;
+          a.download = 'decrypted.pdf';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        };
+        document.getElementById('manual-pwd-hint').textContent = '';
+      } else {
+        btnDownload.classList.add('hidden');
+        document.getElementById('manual-pwd-hint').textContent =
+          `Use password "${d.password}" to open your PDF manually.`;
+      }
+
+      successCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      break;
+    }
+
+    case 'failed':
+      stageSet(3, 'fail', 'EXHAUSTED', 100, null);
+      stageSet(4, 'fail', 'EXHAUSTED', 100, null);
+      failureCard.classList.remove('hidden');
+      document.getElementById('failure-meta').textContent =
+        `${d.reason} · ${d.attempts.toLocaleString()} attempts · ${d.time.toFixed(2)}s elapsed. ` +
+        `Password not found in dictionary or Markov model coverage.`;
+      setGauge(15, 'Failed', 'Attack Exhausted', '#ee7d77');
+      setTelemetry(0, 100, 100);
+      addLog(`Attack exhausted · ${d.reason} · ${d.attempts.toLocaleString()} attempts`, 'text-error');
+      failureCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      break;
+
+    case 'error':
+      addLog(`[!] Error: ${d.message}`, 'text-error');
+      stageSet(1, 'fail', 'ERROR', 0, d.message);
+      setGauge(0, 'Error', d.message.substring(0, 20), '#ee7d77');
+      break;
+
+    case 'done':
+      addLog('─── Session complete ───', 'text-slate-700');
+      break;
+  }
+}
+</script>
+</body>
+</html>

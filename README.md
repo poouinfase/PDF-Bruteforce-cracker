@@ -2,6 +2,7 @@
 
 A full-stack penetration testing demonstration tool that brute-forces password-protected PDF files using a two-phase attack strategy: a sequential dictionary sweep followed by a Markov-chain weighted password generator. Built as a class project for an introductory penetration testing course.
 
+**Live Demo:** [https://pdf-bruteforce-cracker.onrender.com](https://pdf-bruteforce-cracker.onrender.com)
 ---
 
 ## Overview
@@ -141,7 +142,7 @@ Navigate to `http://localhost:3001` in your browser. The server serves `frontend
 
 ## Usage
 
-1. Open `http://localhost:3001` in a modern browser (Chrome, Edge, or Firefox).
+1. Open the [Live Demo](https://pdf-bruteforce-cracker.onrender.com) (or `http://localhost:3001` if running locally) in a modern browser.
 2. Drag and drop a password-protected PDF onto the upload zone, or click "browse files".
 3. Click **Initiate Attack**.
 4. Watch the attack pipeline progress in real time:
